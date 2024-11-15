@@ -1,0 +1,198 @@
+[12:54 pm, 13/11/2024] VIGHNESH S: # Constants for the environment
+RSU_coverage = 1000  # RSU coverage in meters (1 km)
+task_sizes = [5, 7, 10]  # Task sizes in MB
+delay_tolerance_l = [0.35, 0.5]  # Lower delay tolerance in seconds
+delay_tolerance_u = [0.5, 0.65]  # Upper delay tolerance in seconds
+compute_cycles_needed = [0.2, 0.3, 0.4]  # Computing cycles in Gigacycles
+bandwidth_block_size = 180  # Bandwidth block size in kHz
+available_BRBs = 50  # Available bandwidth resource blocks per RSU
+transmit_power = 200  # Transmit power in mW
+noise_spectral_density = -174  # Noise spectral density in dBm/Hz
+
+class Environment:
+    def _init_(self, num_clients, num_servers, area_size, mean_arrival_rate, compute_cycles_needed, delay_tolerance):
+        self.num_clients = num_clients
+        self.num…
+[5:39 pm, 13/11/2024] VIGHNESH S: import math
+import numpy as np
+from scipy.stats import rice  # Importing rice for Rician fading
+
+# Constants for the environment
+C = 3 * 10**8  # Speed of light in m/s
+FREQ = 5.9 * 10**9  # Frequency in Hz (5.9 GHz)
+D0 = 100  # Reference distance in meters
+ALPHA = 3.75  # Path loss exponent
+TRANSMIT_POWER_DBM = 23  # Transmit power in dBm
+NOISE_SPECTRAL_DENSITY_DBM = -174  # Noise spectral density in dBm/Hz
+BANDWIDTH = 180 * 10**3  # Bandwidth in Hz (180 kHz)
+K_FACTOR = 6  # Rician K-factor
+
+RSU_coverage = 1000  # RSU coverage in meters (1 km)
+task_sizes = [5, 7, 10]  # Task sizes in MB
+delay_tolerance_l = [0.35, 0.5]  # Lower delay tolerance in seconds
+delay_tolerance_u = [0.5, 0.65]  # Upper delay tolerance in seconds
+compute_cycles_needed = [0.2, 0.3, 0.4]  # Computing cycles in Gigacycles
+bandwidth_block_size = 180  # Bandwidth block size in kHz
+available_BRBs = 50  # Available bandwidth resource blocks per RSU
+
+class Environment:
+    def init(self, num_clients, num_servers, area_size, mean_arrival_rate, compute_cycles_needed, delay_tolerance):
+        self.num_clients = num_clients
+        self.num_servers = num_servers
+        self.area_size = area_size
+        self.mean_arrival_rate = mean_arrival_rate
+        self.compute_cycles_needed = compute_cycles_needed
+        self.delay_tolerance = delay_tolerance
+        
+        self.clients = []  # List to store client objects
+        self.servers = []  # List to store server objects
+        self.request_classes = []  # List to store client request classes
+        self.server_classes = []  # List to store server classes
+        
+        # Initialize clients and servers
+        self.generate_clients()
+        self.generate_servers()
+    
+    def reset(self):
+        # Reset environment and client/server states for a new episode
+        self.clients = []
+        self.servers = []
+        self.request_classes = []
+        self.server_classes = []
+        self.generate_clients()
+        self.generate_servers()
+    
+    def generate_clients(self):
+        # Function to randomly generate client objects (random positions, arrival times, task sizes, etc.)
+        pass
+    
+    def generate_servers(self):
+        # Function to randomly generate server objects (moving and stationary)
+        pass
+    
+    def update_clients(self):
+        for client in self.clients:
+            # Update client position and remaining time in range
+            client.update_position()
+            
+            # Remove client if out of RSU's coverage
+            if self.calculate_distance(client) > RSU_coverage:
+                self.clients.remove(client)
+            else:
+                # Update client status (e.g., remaining time in range)
+                client.remaining_time_in_range -= 1
+                if client.remaining_time_in_range <= 0:
+                    self.clients.remove(client)
+    
+    def update_servers(self):
+        for server in self.servers:
+            # Update server position (if moving) or status
+            server.update_position()
+            
+            # Remove server if out of RSU's coverage
+            if self.calculate_distance(server) > RSU_coverage:
+                self.servers.remove(server)
+            else:
+                # Update server's remaining available time/resources
+                server.remaining_time_in_range -= 1
+                if server.remaining_time_in_range <= 0:
+                    self.servers.remove(server)
+    
+    def assign_clients_to_request_class(self):
+        # Assign clients to request classes based on their task requirements
+        pass
+    
+    def assign_servers_to_request_class(self):
+        # Assign servers to request classes 
+        pass
+    
+    def calculate_fspl(distance):
+        """Calculate Free Space Path Loss (FSPL) in linear scale."""
+        fspl = ((4 * math.pi * FREQ * D0 / C) * 2) * ((distance / D0) * ALPHA)
+        return fspl
+
+    def calculate_fspl_db(distance):
+        """Calculate Free Space Path Loss (FSPL) in dB."""
+        term1 = 20 * math.log10((4 * math.pi * FREQ * D0) / C)
+        term2 = 10 * ALPHA * math.log10(distance / D0)
+        fspl_db = term1 + term2
+        return fspl_db
+
+    def apply_rice_fading(fspl_db):
+        """Apply Rice fading to the FSPL (in dB) with a specified Rician K-factor."""
+        # Generate a Rician fading sample with the K-factor
+        rice_fading = rice.rvs(K_FACTOR)
+        path_loss_db = fspl_db + rice_fading
+        return path_loss_db
+
+    def calculate_received_power(path_loss_db):
+        """Calculate the received power in dBm."""
+        received_power_dbm = TRANSMIT_POWER_DBM - path_loss_db
+        return received_power_dbm
+
+    def calculate_snr(received_power_dbm):
+        """Calculate the Signal-to-Noise Ratio (SNR) in linear scale."""
+        noise_power_dbm = NOISE_SPECTRAL_DENSITY_DBM + 10 * math.log10(BANDWIDTH)
+        noise_power_mw = 10 ** (noise_power_dbm / 10)  # Convert dBm to mW
+        received_power_mw = 10 ** (received_power_dbm / 10)  # Convert dBm to mW
+        snr = received_power_mw / noise_power_mw
+        return snr
+
+    def calculate_link_rate(snr):
+        """Calculate the link rate (or data rate) in bps using the Shannon capacity formula."""
+        link_rate = BANDWIDTH * math.log2(1 + snr)
+        return link_rate
+
+    def calculate_transmission_delay(client, server):
+        """Calculate transmission delay between a client and server."""
+        distance = calculate_distance(client.position, server.position)
+        fspl_db = calculate_fspl_db(distance)
+        path_loss_db = apply_rice_fading(fspl_db)
+        received_power_dbm = calculate_received_power(path_loss_db)
+        snr = calculate_snr(received_power_dbm)
+        link_rate = calculate_link_rate(snr)
+        transmission_delay = client.task_size * 8 * 10**6 / link_rate  # Convert MB to bits
+        return transmission_delay
+
+    def calculate_computational_delay(server, client):
+        """Calculate computational delay based on server's compute capacity and client's computational needs."""
+        computational_delay = client.compute_cycles_needed / server.compute_capacity
+        return computational_delay
+
+    def calculate_total_delay(client, server):
+        """Calculate the total delay as the sum of transmission and computational delays."""
+        transmission_delay = calculate_transmission_delay(client, server)
+        computational_delay = calculate_computational_delay(server, client)
+        total_delay = transmission_delay + computational_delay
+        return total_delay
+
+    def calculate_distance(self, entity):
+        # Calculate the distance between a client/server and the RSU or between client-server pair
+        pass
+    
+    def random_entry_for_clients(self):
+        # Simulate random entry of clients into the RSU's range
+        pass
+    
+    def random_entry_for_servers(self):
+        # Simulate random entry of servers into the RSU's coverage
+        pass
+    
+    def get_state(self):
+        # Return the current state of the environment (client-server pairings, available resources, etc.)
+        pass
+    
+    def reward(self):
+        # Calculate and return the reward based on current actions (e.g., successful task offloading)
+        pass
+    
+    def bandwidth(self):
+        # Assign bandwidth to clients based on the available resources and clients in range
+        total_bandwidth = available_BRBs * bandwidth_block_size  # Total bandwidth
+        num_clients_in_range = len(self.clients)
+        
+        if num_clients_in_range > 0:
+            # Divide the total bandwidth equally among the clients
+            bandwidth_per_client = total_bandwidth / num_clients_in_range
+            for client in self.clients:
+                client.bandwidth = bandwidth_per_client

@@ -1,0 +1,122 @@
+class RSUEnvironment:
+    RSU_COVERAGE_DIAMETER = 1.0  # km
+    RSU_COVERAGE_RADIUS = RSU_COVERAGE_DIAMETER / 2
+    TIME_SLOT_DURATION = 1 / 60  # 1 minute in hours
+
+    def __init__(self, mean_arrival_rate, compute_cycles_factor, delay_tolerance_range):
+        self.mean_arrival_rate = mean_arrival_rate  # Lambda for Poisson distribution
+        self.compute_cycles_factor = compute_cycles_factor  # Factor for computing cycles based on task size
+        self.delay_tolerance_range = delay_tolerance_range
+        self.clients = []
+        self.request_classes = [RequestClass(i+1) for i in range(4)]
+        
+    def run_time_slot(self):
+        # Simulate a single time slot in which clients may arrive and be updated
+        self.generate_clients()
+        self.update_clients()
+
+    def generate_clients(self):
+        # Determine the number of new clients using Poisson distribution
+        num_new_clients = np.random.poisson(self.mean_arrival_rate)
+        
+        for _ in range(num_new_clients):
+            # Generate client position randomly within RSU coverage
+            initial_position = random.uniform(-self.RSU_COVERAGE_RADIUS, self.RSU_COVERAGE_RADIUS)
+            
+            # Randomly set speed between 15 and 25 km/h
+            speed = random.uniform(15, 25)
+            
+            # Randomly set direction (+1 or -1)
+            direction = random.choice([-1, 1])
+            
+            # Calculate time slots available based on speed and initial position
+            time_slots_available = self.calculate_time_slots(initial_position, speed, direction)
+            
+            # Randomly assign task size and calculate computing cycles
+            task_size = random.randint(1, 10)
+            computing_cycles = task_size * self.compute_cycles_factor
+            
+            # Assign delay tolerance and check if client is acceptable
+            delay_tolerance = random.randint(*self.delay_tolerance_range)
+            
+            # Check if the client meets the delay tolerance criteria
+            if delay_tolerance <= time_slots_available:
+                # Create client
+                client = Client(
+                    client_id=len(self.clients),  # Unique client ID
+                    position=initial_position,
+                    speed=speed,
+                    direction=direction,
+                    computing_cycles=computing_cycles,
+                    task_size=task_size,
+                    delay_tolerance=delay_tolerance,
+                    time_slots_available=time_slots_available
+                )
+                
+                # Add client to list and assign to request class
+                self.clients.append(client)
+                self.assign_to_request_class(client)
+
+    def update_clients(self):
+        """
+        i need to update client's position
+        Update the status of clients:
+        1. Remove clients that have moved out of RSU coverage.
+        2. Remove clients whose tasks are completed.
+        """
+        for client in self.clients[:]:  # Iterate over a copy of the client list to avoid modification errors
+            if self.calculate_distance(client) > self.RSU_COVERAGE_RADIUS or client.computing_cycles <= 0:
+                # Remove from the request class
+                self.remove_from_request_class(client)
+                # Remove from the client list
+                self.clients.remove(client)
+
+    def remove_from_request_class(self, client):
+        """
+        Remove client from their corresponding request class based on their computing cycles.
+        """
+        for request_class in self.request_classes:
+            for client_info in request_class.clients:
+                if client_info["client_id"] == client.client_id:
+                    request_class.clients.remove(client_info)
+                    request_class.total_computing_cycles -= client.computing_cycles
+                    break
+
+    def calculate_distance(self, client):
+        """
+        Calculate the distance of a client from the RSU's center.
+        """
+        return abs(client.position)  # Assuming the RSU is at the center and moving along the x-axis
+
+    def calculate_time_slots(self, position, speed, direction):
+        """
+        Calculate the time slots before the client leaves RSU coverage.
+        position: initial x-coordinate position of the client within RSU coverage.
+        speed: client's speed in km/h.
+        direction: +1 or -1, representing movement along the x-axis.
+        """
+        distance_to_exit = self.RSU_COVERAGE_RADIUS - abs(position)
+        # Convert speed to km per minute, then calculate time slots based on the distance to exit
+        speed_km_per_min = speed / 60
+        time_slots = distance_to_exit / (speed_km_per_min * abs(direction))
+        
+        return int(time_slots)  # Convert to integer time slots
+
+    def assign_to_request_class(self, client):
+        """
+        Assign client to the appropriate request class based on computing cycles needed.
+        """
+        if client.computing_cycles <= 100:
+            class_index = 0  # Request Class 1
+        elif client.computing_cycles <= 200:
+            class_index = 1  # Request Class 2
+        elif client.computing_cycles <= 300:
+            class_index = 2  # Request Class 3
+        else:
+            class_index = 3  # Request Class 4
+        
+        # Add client to the selected request class and update total computing cycles required
+        self.request_classes[class_index].add_client({
+            "client_id": client.client_id,
+            "computing_cycles": client.computing_cycles
+        })
