@@ -125,5 +125,38 @@ class Environment:
         pass
     
     def reward(self):
-        # Calculate and return the reward based on current actions (e.g., successful task offloading)
-        pass
+        """
+        Calculate the reward based on the current actions (e.g., successful task offloading).
+        Returns:
+            float: The cumulative reward for the current timestep.
+        """
+        total_reward = 0
+
+        for client in self.clients:
+            # Transmission delay
+            link_rate = self.calculate_link_rate(client)
+            transmission_delay = client.task_size / link_rate  # Li / Link Rate
+
+            # Computation delay
+            server = client.assigned_server
+            if server:
+                effective_computation_rate = server.computing_capacity / len(server.assigned_clients)  # Ct,i / Mt,i
+                computation_delay = client.computing_cycles / effective_computation_rate  # Ci / C't,v
+            else:
+                computation_delay = float('inf')  # No server assigned
+
+            # Total delay
+            total_delay = transmission_delay + computation_delay
+
+            # Utility function
+            if total_delay <= client.delay_lower_bound:
+                utility = 1
+            elif client.delay_lower_bound < total_delay < client.delay_upper_bound:
+                utility = (total_delay - client.delay_lower_bound) / (client.delay_upper_bound - client.delay_lower_bound)
+            else:
+                utility = 0
+
+            # Add to total reward
+            total_reward += utility
+
+        return total_reward
