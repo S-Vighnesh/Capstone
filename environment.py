@@ -1,7 +1,7 @@
 import random
 import numpy as np
 import math
-
+import utils
 
 class RSUEnvironment:
     RSU_COVERAGE_DIAMETER = 1.0  # km
@@ -49,7 +49,6 @@ class RSUEnvironment:
             computing_cycles = task_size * self.compute_cycles_factor
             delay_tolerance = random.randint(*self.delay_tolerance_range)
             upper_delay_tolerance = delay_tolerance + 0.15
-
             if delay_tolerance <= time_slots_available:
                 client = Client(
                     client_id=len(self.clients),
@@ -138,13 +137,10 @@ class RSUEnvironment:
         num_new_servers = np.random.poisson(1)  # Average 1 new server per time slot
         for _ in range(num_new_servers):
             self.add_server()
-
         for server in self.servers[:]:
             server.update_position(self.TIME_SLOT_DURATION)
-
             if abs(server.position[0]) > self.area_size / 2:
                 self.servers.remove(server)
-
             server.remaining_time_in_range -= 1
             if server.remaining_time_in_range <= 0:
                 self.remove_server_from_request_classes(server)
@@ -173,14 +169,11 @@ class RSUEnvironment:
     def assign_servers_to_request_classes(self):
         # Clear previous server-class associations
         self.server_classes = [RequestClass(i + 1) for i in range(4)]
-
         # Sort servers based on arrival order
         sorted_servers = sorted(self.servers, key=lambda s: s.server_id)
-
         for request_class in self.request_classes:
             while request_class.total_computing_cycles > 0 and sorted_servers:
                 server = sorted_servers.pop(0)  # Take the next server in the list and remove it
-
                 # Allocate server resources to the request class
                 if server.computing_cycles_available >= request_class.total_computing_cycles:
                     server.computing_cycles_available -= request_class.total_computing_cycles
@@ -246,3 +239,70 @@ class Server:
             x, y = self.position
             x += self.speed * time_slot_duration * self.direction
             self.position = (x, y)
+
+def get_state(self):
+    state = {
+        "request_class_state": self.request_class_state,
+        "server_class_state": self.server_class_state
+    }
+    return state
+
+def apply_action(self, action):
+    for client_id, server_id in action:
+        # Retrieve client and server objects
+        client = self.clients[client_id]
+        server = self.servers[server_id]
+
+        # Perform the matching
+        client.assigned_server = server
+        server.assigned_clients.append(client)
+
+        # Update server's available resources
+        server.remaining_capacity -= client.compute_cycles_needed
+        server.remaining_bandwidth -= client.task_bandwidth_needed
+
+def reward(self):
+    total_reward = 0
+
+    for client in self.clients:
+        # Transmission delay
+        link_rate = self.calculate_link_rate(client)
+        transmission_delay = client.task_size / link_rate  # Li / Link Rate
+
+        # Computation delay
+        server = client.assigned_server
+        if server:
+            effective_computation_rate = server.computing_capacity / len(server.assigned_clients)  # Ct,i / Mt,i
+            computation_delay = client.computing_cycles / effective_computation_rate  # Ci / C't,v
+        else:
+            computation_delay = float('inf')  # No server assigned
+        # Total delay
+        total_delay = transmission_delay + computation_delay
+        # Utility function
+        if total_delay <= client.delay_lower_bound:
+            utility = 1
+        elif client.delay_lower_bound < total_delay < client.delay_upper_bound:
+            utility = (total_delay - client.delay_lower_bound) / (client.delay_upper_bound - client.delay_lower_bound)
+        else:
+            utility = 0
+        # Add to total reward
+        total_reward += utility
+    return total_reward
+
+def reset(self):
+    self.initialize_clients_and_servers()  # Reset clients and servers
+    self.create_request_and_server_classes()  # Recreate request and server classes
+    return self.get_state()
+
+def step(self, action):
+    # Apply the action to the environment
+    self.apply_action(action)
+    # Calculate the reward
+    reward = self.calculate_reward()
+    # Check if the episode is done (all clients are matched or maximum steps reached)
+    done = all(client.assigned_server is not None for client in self.clients)
+    # Retrieve the new state
+    state = self.get_state()
+    # Additional information (optional)
+    info = {}
+    return state, reward, done, info
